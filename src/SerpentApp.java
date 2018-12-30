@@ -28,7 +28,6 @@ public class SerpentApp extends Application
     private static final int STARTING_DIRECTION = 0; // Starting from the Left. See (*) below
     public static final int DELAY = 300; // In milliseconds
     private Timer timer;
-    private boolean inSession; // Determines whether the game is still in session
 
     public static void main(String[] args)
     {
@@ -43,8 +42,6 @@ public class SerpentApp extends Application
          */
         stepTiming = System.currentTimeMillis();
         direction = STARTING_DIRECTION;
-
-        inSession = true;
 
         root = new GridPane();
 
@@ -120,8 +117,6 @@ public class SerpentApp extends Application
             @Override
             public void run()
             {
-                if (!inSession) // If the game is over, cancel the task and cease updating
-                    timer.cancel();
 
                 board.determineMove(direction); // Using the user's input, determine the next state of the Snake
                 try
@@ -136,7 +131,8 @@ public class SerpentApp extends Application
                  */
                 catch (GameOverException | ArrayIndexOutOfBoundsException e)
                 {
-                    inSession = false; // Indicate that the game is over
+                    timer.cancel();
+
                     Platform.runLater(() ->
                     {
                         /*
@@ -155,15 +151,18 @@ public class SerpentApp extends Application
                         overAlert.setContentText("Restart the Game?");
                         Optional<ButtonType> result = overAlert.showAndWait();
 
-                        if (result.get() == ButtonType.OK)
+                        if (result.get() != ButtonType.OK)
                         {
-                            restartTimer();
-                            gameState.setText("Game is in Session");
+                            Platform.exit();
                         }
                         else
                         {
-                            // TODO: Add a way to restart the game
+                            // TODO: Find a way to restart the TimerTask
+
+                            timer = new Timer();
+                            timer.schedule(this,DELAY,DELAY);
                         }
+
                     });
                 }
             }
@@ -171,9 +170,5 @@ public class SerpentApp extends Application
 
         timer.schedule(task,DELAY,DELAY);
     }
-
-    private void restartTimer()
-    {
-        timer = new Timer();
-    }
 }
+

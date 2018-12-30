@@ -7,6 +7,7 @@ import javafx.scene.paint.Color;
  *
  * States of the game:
  *          In Session: From start
+ *          User input: Call determineMove() to change the direction of the Snake
  *          Game Over: When the Snake hits itself or when it hits a Wall (an exception will be thrown for each case)
  *
  * Expectation when the game ends: no more calls to the updateBoard() method should be made
@@ -120,6 +121,15 @@ public class GridData
         return snakeLength;
     }
 
+    /**
+     * Determine where the Snake would move next the next time updateBoard() is called
+     * @param direction
+     *          0: Left
+     *          1: Up
+     *          2: Right
+     *          3: Down
+     * @throws IllegalArgumentException if the parameter is not one of the options above
+     */
     public void determineMove(int direction)
     {
          /*
@@ -143,19 +153,38 @@ public class GridData
             case 3:
                 locY++;
                 break;
+            default:
+                throw new IllegalArgumentException();
         }
     }
 
+    /**
+     * Update the current states of the Object. This method is expected to be executed in
+     * each time a state is expected to be changed.
+     * @throws GameOverException when the Snake hits itself
+     * @throws ArrayIndexOutOfBoundsException when the Snake hits a wall
+     */
     public void updateBoard()
     {
-        boolean growing = false;
-        emptyBoard();
+        boolean growing = false; // indicate whether a food location has been reached
+                                // by the Snake
+        emptyBoard(); // Empty the board for each execution
 
         gc.setStroke(Color.BLACK);
 
-        bodyLocX[0] = prevLocX;
+        /*
+        For each execution of the method, move the head one Node toward the current direction
+        and move each Node of the Snake's body to the previous location of the Node in front
+        of it.
+         */
+
+        bodyLocX[0] = prevLocX; // update the body location to the previously saved location
         bodyLocY[0] = prevLocY;
 
+        /*
+        If the location of the Snake matches the location of a food Node, the Snake has consumed
+        the food. Update the Snake's length accordingly.
+         */
         if (foodLocX == locX && foodLocY == locY)
         {
             growing = true;
@@ -177,6 +206,9 @@ public class GridData
             }
         }
 
+        /*
+        Indicate for each Node of the body that it is a BODY Node of the board
+         */
         for (int i = 0; i < bodyLocX.length; i++)
         {
             if (bodyLocX[i] != -1 && bodyLocY[i] != -1)
@@ -187,19 +219,26 @@ public class GridData
             throw new GameOverException();
 
         /*
-        Set the State for each block
+        Set the State for each Node
          */
         board[locX][locY] = BoardState.HEAD;
         board[foodLocX][foodLocY] = BoardState.FOOD;
         prevLocX = locX;
         prevLocY = locY;
 
+        /*
+        If the Snake has consumed a food Node, spawn a new food and update the Head's location
+        to the old food's location
+         */
         if (growing)
         {
             board[foodLocX][foodLocY] = BoardState.HEAD;
             newFood();
         }
 
+        /*
+        Paint each Node of the Board according to their state
+         */
         for (int row = 0; row < board.length; row++)
         {
             for (int column = 0; column < board[row].length; column++)
@@ -231,12 +270,18 @@ public class GridData
         }
     }
 
+    /**
+     * Restart the board and spawn a new Snake
+     */
     public void restart()
     {
+        bodyLocX = new int[board.length*board[0].length];
+        bodyLocY = new int[board.length*board[0].length];
         emptyBoard();
         newFood();
         locX =(int) (Math.random()*board.length/2)+board.length/4;
         locY =(int) (Math.random()*board[0].length/2)+board[0].length/4;
+
     }
 
     private void emptyBoard()
