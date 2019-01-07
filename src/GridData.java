@@ -23,18 +23,19 @@ import javafx.scene.paint.Color;
  * Restrictions:
  *          This class does not allow direct mutations to its states. All changes will occur within the Model
  *          as to accredit the MVC pattern.
- *          The object MUST be constructed, at minimum, a 2 x 2 grid.
+ *          The object MUST be constructed, at minimum, a grid bigger than the the square of the defaultLength
  *
  * State expectations:
  *          Two arrays will be allocated for the location of each tile of the Snake. It is expected that unused memories
  *          be set (by default) to -1.
  *
  * @author Luan Ta
- * @version 1.0.0 Beta
+ * @version 1.2.1 Beta
  */
 public class GridData
 {
-    private BoardState[][] board; // The 2D Grid of the game
+    private int width;
+    private int height;
     private GraphicsContext gc;
     private int snakeLength; // The length of the Snake (not counting the Head)
     private int[] bodyLocX; // The location of each tile of the the Snake's body
@@ -45,7 +46,9 @@ public class GridData
     private int prevLocY;
     private int foodLocX; // The location of the Food
     private int foodLocY;
+    private int scoreLeft;
     public static final int DIMENSION = 30; // The default Dimension of each Graphic object
+    public static final boolean GOD_MODE = false; // Will disable ALL Collision logic if set to 'true' ._.
 
     /**
      * Construct a Grid of the dimension width x height and spawn a Snake with the length of defaultLength
@@ -53,21 +56,27 @@ public class GridData
      * @param height the height of the Grid
      * @param defaultLength the starting length of the Snake
      * @param gc the Graphics object to which this object will be displayed upon
-     * @throws IllegalArgumentException if the defaultLength is less than 1 or if the width/height is less than 2
+     * @throws IllegalArgumentException if the defaultLength is less than 1 or if the width/height are too small
+     *                                  in regards to the defaultLength
      */
     public GridData(int width, int height, int defaultLength, GraphicsContext gc)
     {
         /*
-        The game requires AT LEAST a 2 x 2 grid to function
+        The game requires AT LEAST a grid 2 units bigger than the default length of the Snake
          */
-        if (defaultLength < 1 || width < 2 || height < 2)
+        if (defaultLength < 1 || width < 1+defaultLength || height < 1+defaultLength)
             throw new IllegalArgumentException();
+        
+        this.width = width;
+        this.height = height;
+
 
         /*
         The maximum length for the Snake's body is the number of tiles of the Grid
          */
         bodyLocX = new int[width*height];
         bodyLocY = new int[width*height];
+        scoreLeft = width*height - 1 - defaultLength;
 
         /*
         Initialize the arrays
@@ -82,7 +91,6 @@ public class GridData
         Initialize the instance variables
          */
         snakeLength = defaultLength;
-        board = new BoardState[width][height];
         this.gc = gc;
 
         /*
@@ -94,16 +102,11 @@ public class GridData
         prevLocX = -1;
         prevLocY = -1;
 
+        emptyBoard();
+
         newFood();
 
         updateBoard();
-    }
-    public void changeBoardState(int row, int col, BoardState newState)
-    {
-        if (row < 0 || col < 0 || newState == null)
-            throw new IllegalArgumentException();
-
-        board[row][col] = newState;
     }
 
     public int getLocX()
@@ -114,6 +117,11 @@ public class GridData
     public int getLocY()
     {
         return locY;
+    }
+
+    public int getScoreLeft()
+    {
+        return scoreLeft;
     }
 
     public int getSnakeLength()
@@ -168,8 +176,6 @@ public class GridData
     {
         boolean growing = false; // indicate whether a food location has been reached
                                 // by the Snake
-        emptyBoard(); // Empty the board for each execution
-
         gc.setStroke(Color.BLACK);
 
         /*
@@ -187,87 +193,61 @@ public class GridData
          */
         if (foodLocX == locX && foodLocY == locY)
         {
-            growing = true;
-
             for (int i = snakeLength + 1; i > 0; i--)
             {
                 bodyLocX[i] = bodyLocX[i-1];
                 bodyLocY[i] = bodyLocY[i-1];
             }
 
+            /*
+            If the Snake has consumed a food Node, spawn a new food and update the Head's location
+            to the old food's location
+             */
+
+            scoreLeft--;
+            draw(foodLocX,foodLocY,Color.RED);
+            newFood();
+
             snakeLength++;
         }
+
         else
         {
             for (int i = snakeLength; i > 0; i--)
             {
+                if (i == snakeLength)
+                    draw(bodyLocX[snakeLength],bodyLocY[snakeLength],Color.WHITE);
+
                 bodyLocX[i] = bodyLocX[i-1];
                 bodyLocY[i] = bodyLocY[i-1];
             }
         }
 
         /*
-        Indicate for each Node of the body that it is a BODY Node of the board
+        Draw the body and if the head's location matches a body location, a collision between
+        the head and the body happens thus ending the game.
          */
         for (int i = 0; i < bodyLocX.length; i++)
         {
             if (bodyLocX[i] != -1 && bodyLocY[i] != -1)
-                board[bodyLocX[i]][bodyLocY[i]] = BoardState.BODY;
+                draw(bodyLocX[i],bodyLocY[i],Color.GREEN);
+
+            if (bodyLocX[i] == locX && bodyLocY[i] == locY && !GOD_MODE)
+                throw new SelfCollisionException();
         }
 
-        if (board[locX][locY] == BoardState.BODY)
-            throw new GameOverException();
-
         /*
-        Set the State for each Node
+        Draw the head and update the previous locations
          */
-        board[locX][locY] = BoardState.HEAD;
-        board[foodLocX][foodLocY] = BoardState.FOOD;
+        draw(locX,locY,Color.RED); // Draw the Head
         prevLocX = locX;
         prevLocY = locY;
 
         /*
-        If the Snake has consumed a food Node, spawn a new food and update the Head's location
-        to the old food's location
+        If the head collides with a Wall, end the game
          */
-        if (growing)
-        {
-            board[foodLocX][foodLocY] = BoardState.HEAD;
-            newFood();
-        }
-
-        /*
-        Paint each Node of the Board according to their state
-         */
-        for (int row = 0; row < board.length; row++)
-        {
-            for (int column = 0; column < board[row].length; column++)
-            {
-                gc.strokeRect(row*DIMENSION,column*DIMENSION,DIMENSION,DIMENSION);
-                switch (board[row][column])
-                {
-                    case EMPTY:
-                        gc.setFill(Color.WHITE);
-                        gc.fillRect(row*DIMENSION,column*DIMENSION,DIMENSION,DIMENSION);
-                        break;
-
-                    case FOOD:
-                        gc.setFill(Color.BLUE);
-                        gc.fillRect(row*DIMENSION,column*DIMENSION,DIMENSION,DIMENSION);
-                        break;
-
-                    case BODY:
-                        gc.setFill(Color.BLACK);
-                        gc.fillRect(row*DIMENSION,column*DIMENSION,DIMENSION,DIMENSION);
-                        break;
-
-                    case HEAD:
-                        gc.setFill(Color.RED);
-                        gc.fillRect(row*DIMENSION,column*DIMENSION,DIMENSION,DIMENSION);
-                        break;
-                }
-            }
-        }
+        if ((locX >= width || locY >= height || locX < 0 || locY < 0) && !GOD_MODE)
+            throw new WallCollisionException();
     }
 
     /**
@@ -275,39 +255,49 @@ public class GridData
      */
     public void restart()
     {
-        bodyLocX = new int[board.length*board[0].length];
-        bodyLocY = new int[board.length*board[0].length];
-        emptyBoard();
-        newFood();
-        locX =(int) (Math.random()*board.length/2)+board.length/4;
-        locY =(int) (Math.random()*board[0].length/2)+board[0].length/4;
+        bodyLocX = new int[width*height]; // Empty the array
+        bodyLocY = new int[width*height];
+        emptyBoard(); // Empty the board
+        newFood(); // Create a new food
+        locX =(int) (Math.random()*width/2)+width/4; // Spawn a new head
+        locY =(int) (Math.random()*height/2)+height/4;
 
     }
 
     private void emptyBoard()
     {
-        for (int row = 0; row < board.length; row++)
+        for (int row = 0; row < width; row++)
         {
-            for (int column = 0; column < board[0].length; column++)
-            {
-                board[row][column] = BoardState.EMPTY;
-            }
+            for (int column = 0; column < height; column++)
+                draw(row,column,Color.WHITE);
         }
     }
 
     private void newFood()
     {
-        foodLocX = (int) (Math.random()*board.length);
-        foodLocY = (int) (Math.random()*board[0].length);
+        foodLocX = (int) (Math.random()*width);
+        foodLocY = (int) (Math.random()*height);
 
         /*
         If the spawn location of the food and the head are the same, change the location of the food
          */
-        while (board[foodLocX][foodLocY] == BoardState.HEAD || board[foodLocX][foodLocY] == BoardState.BODY)
+        for (int i = 0; i < snakeLength; i++)
         {
-            foodLocX = (int) (Math.random()*board.length);
-            foodLocY = (int) (Math.random()*board[0].length);
+            if ((foodLocX == bodyLocX[i] && foodLocY == bodyLocY[i]) ||
+                    (foodLocX == locX && foodLocY == locY))
+            {
+                System.out.println("Food: " + foodLocX + " " + foodLocY);
+                newFood();
+            }
         }
+
+        draw(foodLocX,foodLocY,Color.BLUE);
     }
 
+    private void draw(int x, int y, Color c)
+    {
+        // gc.strokeRect(x*DIMENSION,y*DIMENSION,DIMENSION,DIMENSION);
+        gc.setFill(c);
+        gc.fillRect(x*DIMENSION,y*DIMENSION,DIMENSION,DIMENSION);
+    }
 }
